@@ -7,19 +7,16 @@ use macaroon::verifier::Verifier;
 use sodiumoxide::crypto::auth;
 use sodiumoxide::crypto::auth::hmacsha512256::Key;
 
-fn authenticator() -> (Key, Macaroon ) {
+
+fn permission_request( macaroon: &mut Macaroon ) {
+
 	// Construct a macaroon and serialize it
 	let secret_key = auth::gen_key();
 	let identifier = "App1";
 	let mut macaroon = Macaroon::new(&secret_key, identifier.into(), None ).unwrap();
 	let data = serde_json::to_string(&macaroon).unwrap();
 
-	(secret_key, macaroon)
-	// println!("initial macaroon: {}", data);
-	// println!("secret_key used was: {:?}", &secret_key);
-}
 
-fn permission_request( macaroon: &mut Macaroon ) {
 	macaroon.add_first_party_caveat(Caveat{
 		identifier: "labels = [bacon]".into(),
 		..Default::default()
@@ -92,27 +89,29 @@ fn get_perms_for_app( macaroon: &Macaroon ) -> Vec<String> {
 
 fn main() {
 
-	// client handler
-	let ( secret_key, mut macaroon ) = authenticator();
+	// auth generates initial macaroon, adding caveats for app
+	let ( secret_key, mut macaroon ) = permission_request();
 
 	println!("KEY {:?}", secret_key);
 	println!("macaroon {:?}", macaroon);
 
-	// lets get our permission...
-	permission_request( &mut macaroon );
+	// secret key must be stored in client handler for checks...
+	// when a request comes in it is used to validate the macaroon
 
-	//client handler checks
+	//client handler checks, against req and for other perms it cares about
+	// may also check other conditions we want to make available to folk
+	// (ie expiry time added by user)
+	// could perhaps have safecoin checks eg.
 	is_valid_at_client_handler( &macaroon, secret_key );
 
+
+	// we would then either forward macaroon + key to data handler.
+	// or extract labels and pass them on...
 	let perms = get_perms_for_app( &macaroon );
 	println!("perms found {:?}", perms);
 
+	// data handler does its own checks
 	is_valid_at_data_handler(perms, None);
-
-
-
-
-
 
 }
 
