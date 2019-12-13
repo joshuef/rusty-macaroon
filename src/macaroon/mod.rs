@@ -16,6 +16,8 @@ impl ByteString {
     // Takes a base64 encoded string and turns it into a decoded ByteString
     fn new_from_base64(v: &str) -> Result<ByteString> {
         let decoded = base64::decode(v)?;
+
+		// println!("decoded string: {:?}", std::str::from_utf8(&decoded ) );
         Ok(ByteString(decoded))
     }
 }
@@ -41,6 +43,7 @@ impl Default for ByteString {
 impl fmt::Display for ByteString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", base64::encode(&self.0))
+        // write!(f, "{}", base64::decode(&self.0))
     }
 }
 
@@ -170,7 +173,7 @@ impl Macaroon {
         }
         self.signature = Self::hash_first_party(&self.signature, &c.identifier)?;
         self.caveats.push(c);
-        
+
         Ok(())
     }
 
@@ -186,10 +189,10 @@ impl Macaroon {
         // nonce becomes part of the verification ID. So the final message is
         // NONCE+ENCODED_SECRET_DATA
         caveat_copy.verification_id = encrypt(&self.signature, caveat_key)?;
-        
+
         self.signature = Self::hash_third_party(&self.signature, &c.identifier, &caveat_copy.verification_id)?;
         self.caveats.push(caveat_copy);
-        
+
         Ok(())
     }
 

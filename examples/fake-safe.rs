@@ -21,10 +21,77 @@ fn authenticator() -> (Key, Macaroon ) {
 
 fn permission_request( macaroon: &mut Macaroon ) {
 	macaroon.add_first_party_caveat(Caveat{
-		identifier: "labels = bacon".into(),
+		identifier: "labels = [bacon, sandwhich]".into(),
 		..Default::default()
 	}).unwrap();
 
+
+
+
+	let expire = chrono::Utc::now() + chrono::Duration::hours(5);
+	macaroon.add_first_party_caveat(Caveat{
+	    identifier: format!("time < {}", expire.to_rfc3339()).into(),
+	    ..Default::default()
+	}).unwrap();
+
+	let data = serde_json::to_string(&macaroon).unwrap();
+
+	println!("this time with caveeats (and serialised): {}", data);
+
+
+	let deserialized: Macaroon = serde_json::from_str(&data).unwrap();
+	println!("this time with caveeats (and deserialized): {:?}", deserialized);
+
+	println!("so lets check if the deserialized sig matches macaroon sig: {:?}", deserialized.signature == macaroon.signature);
+
+
+}
+
+
+fn is_valid_at_client_handler( macaroon: &Macaroon, secret_key: Key ) -> bool {
+
+    // Succeeding verification
+    let mut v = Verifier::default();
+
+	// aha, things to check when we call verify
+    v.satisfy_exact("labels = [bacon, sandwhich]".into());
+    // v.satisfy_exact("user = me".into());
+
+	println!("About to mess with sig");
+
+    // Could also check it's no expired here...
+    v.satisfy_general(Box::new(is_expired));
+
+	// we check that the macaroon is valid by comparing to auth stored secret key.
+    v.verify(&macaroon, &secret_key, Vec::new()).unwrap();
+
+	true
+
+
+}
+
+// we could pass a signed message if we want to establish ownership etc....
+fn is_valid_at_data_handler( perms: Vec<String>, _signed_message: Option<String> ) -> bool {
+	// TODO, check perms / labels.
+
+	println!("perms received for check, {:?}", perms );
+
+	true
+
+}
+
+
+fn get_perms_for_app( macaroon: &Macaroon ) -> Vec<String> {
+	let caveats = macaroon.get_first_party_caveats().clone();
+
+	let mut perms = vec![];
+	for cav in &caveats {
+		// println!("\n\nCaveats found:: {:?}", cav.identifier.0 );
+		// println!("\n\nCaveats found:: {:?}", std::str::from_utf8( &cav.identifier.0 ) );
+		perms.push(std::str::from_utf8( &cav.identifier.0 ).unwrap().to_string());
+	}
+
+	perms
 }
 
 fn main() {
@@ -34,84 +101,17 @@ fn main() {
 	println!("KEY {:?}", secret_key);
 	println!("macaroon {:?}", macaroon);
 
-
+	// lets get our permission...
 	permission_request( &mut macaroon );
 
-    // Add some caveats to the macaroon and then serialize the macaroon (and
-    // deserialize, for example sake)
-    macaroon.add_first_party_caveat(Caveat{
-        identifier: "labels = bacon".into(),
-        ..Default::default()
-    }).unwrap();
+	//client handler checks
+	is_valid_at_client_handler( &macaroon, secret_key );
 
-    // macaroon.add_first_party_caveat(Caveat{
-    //     identifier: "x = y".into(),
-    //     ..Default::default()
-    // }).unwrap();
+	let perms = get_perms_for_app( &macaroon );
+	println!("perms found {:?}", perms);
 
-	// macaroon.add_first_party_caveat(Caveat{
-    //     identifier: "foo = baz".into(),
-    //     ..Default::default()
-    // }).unwrap();
+	is_valid_at_data_handler(perms, None);
 
-    // macaroon.add_first_party_caveat(Caveat{
-    //     identifier: "app = me".into(),
-    //     ..Default::default()
-    // }).unwrap();
-
-
-    let expire = chrono::Utc::now() + chrono::Duration::hours(5);
-    macaroon.add_first_party_caveat(Caveat{
-        identifier: format!("time < {}", expire.to_rfc3339()).into(),
-        ..Default::default()
-    }).unwrap();
-
-    let data = serde_json::to_string(&macaroon).unwrap();
-
-    println!("this time with caveeats (and serialised): {}", data);
-    let deserialized: Macaroon = serde_json::from_str(&data).unwrap();
-	println!("this time with caveeats (and deserialized): {:?}", deserialized);
-    println!("so lets check if the deserialized sig matches macaroon sig: {:?}", deserialized.signature == macaroon.signature);
-
-    // Succeeding verification
-    let mut v = Verifier::default();
-
-	// aha, things to check when we call verify
-    v.satisfy_exact("labels = bacon".into());
-    // v.satisfy_exact("user = me".into());
-
-	println!("About to mess with sig");
-    // A general expiry example
-    v.satisfy_general(Box::new(is_expired));
-    v.verify(&macaroon, &secret_key, Vec::new()).unwrap();
-
-    let correct_sig = macaroon.signature.clone();
-    macaroon.signature = "ohnoesthisisbad".into();
-    match v.verify(&macaroon, &secret_key, Vec::new()) {
-        Ok(_) => (),
-        Err(e) => println!("Someone messed with me {:?}", e)
-    };
-
-    macaroon.signature = correct_sig;
-
-    // Failing verification
-    macaroon.add_first_party_caveat(Caveat{
-        identifier: "foo = baz".into(),
-        ..Default::default()
-    }).unwrap();
-
-
-    match v.verify(&macaroon, &secret_key, Vec::new()) {
-        Ok(_) => (),
-        Err(e) => println!("I didn't validate.... as there's a caveat not checked... {:?}", e)
-    };
-
-	v.satisfy_exact("foo = baz".into());
-
-    match v.verify(&macaroon, &secret_key, Vec::new()) {
-        Ok(_) => println!("Validated now, as we check all caveats...."),
-        Err(e) => println!("I didn't validate.... because something is wrong {:?}", e)
-    };
 }
 
 fn is_expired(c: &Caveat) -> bool {
