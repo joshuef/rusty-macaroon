@@ -8,7 +8,7 @@ use sodiumoxide::crypto::auth;
 use sodiumoxide::crypto::auth::hmacsha512256::Key;
 
 
-fn permission_request( macaroon: &mut Macaroon ) {
+fn permission_request() -> (Key, Macaroon) {
 
 	// Construct a macaroon and serialize it
 	let secret_key = auth::gen_key();
@@ -38,7 +38,7 @@ fn permission_request( macaroon: &mut Macaroon ) {
 	// println!("this time with caveeats (and deserialized): {:?}", deserialized);
 
 	println!("so lets check if the deserialized sig matches macaroon sig: {:?}", deserialized.signature == macaroon.signature);
-
+	(secret_key, macaroon)
 
 }
 
@@ -138,6 +138,10 @@ fn get_data_labels() -> Vec<String> {
 }
 
 fn has_label_for_data( c: &Caveat ) -> bool {
+	let prefix = "labels =".as_bytes();
+    if !c.identifier.0.starts_with(&prefix) {
+        return false
+    }
 
 	let labels = get_data_labels();
 	let caveat_labels = std::str::from_utf8( &c.identifier.0 ).unwrap();
