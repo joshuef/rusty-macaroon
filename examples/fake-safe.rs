@@ -36,11 +36,11 @@ fn permission_request( macaroon: &mut Macaroon ) {
 
 	let data = serde_json::to_string(&macaroon).unwrap();
 
-	println!("this time with caveeats (and serialised): {}", data);
+	println!("\n\n Macaroon to give to apps (and serialised): {} \n\n", data);
 
 
 	let deserialized: Macaroon = serde_json::from_str(&data).unwrap();
-	println!("this time with caveeats (and deserialized): {:?}", deserialized);
+	// println!("this time with caveeats (and deserialized): {:?}", deserialized);
 
 	println!("so lets check if the deserialized sig matches macaroon sig: {:?}", deserialized.signature == macaroon.signature);
 
