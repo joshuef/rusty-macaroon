@@ -17,6 +17,12 @@ fn main() {
 
     // Add some caveats to the macaroon and then serialize the macaroon (and
     // deserialize, for example sake)
+    // m.add_first_party_caveat(Caveat{
+    //     identifier: "labels = not bacon".into(),
+    //     ..Default::default()
+    // }).unwrap();
+
+
     m.add_first_party_caveat(Caveat{
         identifier: "labels = bacon".into(),
         ..Default::default()
@@ -56,6 +62,9 @@ fn main() {
 
 	// aha, things to check when we call verify
     v.satisfy_exact("labels = bacon".into());
+
+	// if caveat identifier doesnt exist on macaroon its ignored...
+    v.satisfy_exact("nonexistant = nothing".into());
     // v.satisfy_exact("user = me".into());
 
 	println!("About to mess with sig");

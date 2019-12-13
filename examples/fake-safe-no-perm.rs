@@ -21,7 +21,7 @@ fn authenticator() -> (Key, Macaroon ) {
 
 fn permission_request( macaroon: &mut Macaroon ) {
 	macaroon.add_first_party_caveat(Caveat{
-		identifier: "labels = [bacon]".into(),
+		identifier: "labels = []".into(),
 		..Default::default()
 	}).unwrap();
 
@@ -100,6 +100,14 @@ fn main() {
 
 	// lets get our permission...
 	permission_request( &mut macaroon );
+
+
+	// manually add a label, trying to hackittt
+	macaroon.add_first_party_caveat(Caveat{
+		identifier: "nonsense = [bacon,sandwhich]".into(),
+		..Default::default()
+	}).unwrap();
+
 
 	//client handler checks
 	is_valid_at_client_handler( &macaroon, secret_key );
