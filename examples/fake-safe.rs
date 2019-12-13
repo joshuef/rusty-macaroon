@@ -5,51 +5,73 @@ extern crate chrono;
 use macaroon::macaroon::{Macaroon, Caveat};
 use macaroon::verifier::Verifier;
 use sodiumoxide::crypto::auth;
+use sodiumoxide::crypto::auth::hmacsha512256::Key;
+
+fn authenticator() -> (Key, Macaroon ) {
+	// Construct a macaroon and serialize it
+	let secret_key = auth::gen_key();
+	let identifier = "App1";
+	let mut macaroon = Macaroon::new(&secret_key, identifier.into(), None).unwrap();
+	let data = serde_json::to_string(&macaroon).unwrap();
+
+	(secret_key, macaroon)
+	// println!("initial macaroon: {}", data);
+	// println!("secret_key used was: {:?}", &secret_key);
+}
+
+fn permission_request( macaroon: &mut Macaroon ) {
+	macaroon.add_first_party_caveat(Caveat{
+		identifier: "labels = bacon".into(),
+		..Default::default()
+	}).unwrap();
+
+}
 
 fn main() {
-    // Construct a macaroon and serialize it
-    let key = auth::gen_key();
-    let identifier = "App1";
-    let mut m = Macaroon::new(&key, identifier.into(), None).unwrap();
-    let data = serde_json::to_string(&m).unwrap();
-    println!("initial macaroon: {}", data);
-    println!("key used was: {:?}", &key);
+
+	let ( secret_key, mut macaroon ) = authenticator();
+
+	println!("KEY {:?}", secret_key);
+	println!("macaroon {:?}", macaroon);
+
+
+	permission_request( &mut macaroon );
 
     // Add some caveats to the macaroon and then serialize the macaroon (and
     // deserialize, for example sake)
-    m.add_first_party_caveat(Caveat{
+    macaroon.add_first_party_caveat(Caveat{
         identifier: "labels = bacon".into(),
         ..Default::default()
     }).unwrap();
 
-    // m.add_first_party_caveat(Caveat{
+    // macaroon.add_first_party_caveat(Caveat{
     //     identifier: "x = y".into(),
     //     ..Default::default()
     // }).unwrap();
 
-	// m.add_first_party_caveat(Caveat{
+	// macaroon.add_first_party_caveat(Caveat{
     //     identifier: "foo = baz".into(),
     //     ..Default::default()
     // }).unwrap();
 
-    // m.add_first_party_caveat(Caveat{
+    // macaroon.add_first_party_caveat(Caveat{
     //     identifier: "app = me".into(),
     //     ..Default::default()
     // }).unwrap();
 
 
     let expire = chrono::Utc::now() + chrono::Duration::hours(5);
-    m.add_first_party_caveat(Caveat{
+    macaroon.add_first_party_caveat(Caveat{
         identifier: format!("time < {}", expire.to_rfc3339()).into(),
         ..Default::default()
     }).unwrap();
 
-    let data = serde_json::to_string(&m).unwrap();
+    let data = serde_json::to_string(&macaroon).unwrap();
 
     println!("this time with caveeats (and serialised): {}", data);
     let deserialized: Macaroon = serde_json::from_str(&data).unwrap();
 	println!("this time with caveeats (and deserialized): {:?}", deserialized);
-    println!("so lets check if the deserialized sig matches macaroon sig: {:?}", deserialized.signature == m.signature);
+    println!("so lets check if the deserialized sig matches macaroon sig: {:?}", deserialized.signature == macaroon.signature);
 
     // Succeeding verification
     let mut v = Verifier::default();
@@ -61,32 +83,32 @@ fn main() {
 	println!("About to mess with sig");
     // A general expiry example
     v.satisfy_general(Box::new(is_expired));
-    v.verify(&m, &key, Vec::new()).unwrap();
+    v.verify(&macaroon, &secret_key, Vec::new()).unwrap();
 
-    let correct_sig = m.signature.clone();
-    m.signature = "ohnoesthisisbad".into();
-    match v.verify(&m, &key, Vec::new()) {
+    let correct_sig = macaroon.signature.clone();
+    macaroon.signature = "ohnoesthisisbad".into();
+    match v.verify(&macaroon, &secret_key, Vec::new()) {
         Ok(_) => (),
         Err(e) => println!("Someone messed with me {:?}", e)
     };
 
-    m.signature = correct_sig;
+    macaroon.signature = correct_sig;
 
     // Failing verification
-    m.add_first_party_caveat(Caveat{
+    macaroon.add_first_party_caveat(Caveat{
         identifier: "foo = baz".into(),
         ..Default::default()
     }).unwrap();
 
 
-    match v.verify(&m, &key, Vec::new()) {
+    match v.verify(&macaroon, &secret_key, Vec::new()) {
         Ok(_) => (),
         Err(e) => println!("I didn't validate.... as there's a caveat not checked... {:?}", e)
     };
 
 	v.satisfy_exact("foo = baz".into());
 
-    match v.verify(&m, &key, Vec::new()) {
+    match v.verify(&macaroon, &secret_key, Vec::new()) {
         Ok(_) => println!("Validated now, as we check all caveats...."),
         Err(e) => println!("I didn't validate.... because something is wrong {:?}", e)
     };
